@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deep, Dark Sea</title>
+<meta name="description" content="Deep, Dark Sea, the greatest game in the universe, on a Commodore 64 in your browser. Cursor keys swim, space fires.">
+<style>
+html, body { margin: 0; height: 100%; }
+body {
+  background: #0b0d10;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+/* The photo is 656x713. Its CRT glass spans x 152..499, y 71..336. */
+.rig {
+  position: relative;
+  height: min(100vh, 713px * 1.6);
+  aspect-ratio: 656 / 713;
+  max-width: 100vw;
+}
+@supports (height: 100dvh) { .rig { height: min(100dvh, 713px * 1.6); } }
+.rig > img { display: block; width: 100%; height: 100%; user-select: none; -webkit-user-drag: none; }
+.tube {
+  position: absolute;
+  left: calc(151 / 656 * 100%); width: calc(350 / 656 * 100%);
+  top: calc(70 / 713 * 100%); height: calc(268 / 713 * 100%);
+  border-radius: 7% / 9%;
+  overflow: hidden; background: #000;
+}
+/* The emulator letterboxes its picture and prints a stats line along the
+   bottom, so the canvas is zoomed past the glass: only the picture and a
+   little border show. */
+#canvas {
+  position: absolute; display: block; outline: none;
+  width: 124%; aspect-ratio: 1.441; left: -12%; top: 50%;
+  transform: translateY(-50%);
+  image-rendering: pixelated;
+}
+.glass {
+  position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background:
+    radial-gradient(ellipse 110% 100% at 50% 50%, transparent 62%, rgba(0,0,0,.6) 100%),
+    linear-gradient(165deg, rgba(255,255,255,.09), rgba(255,255,255,0) 40%);
+}
+</style>
+</head>
+<body>
+<div class="rig">
+  <img src="images/c64.jpg" alt="A Commodore 64 with a 1702 monitor" draggable="false">
+  <div class="tube">
+    <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()" aria-label="Deep, Dark Sea. Cursor keys swim, space fires."></canvas>
+    <div class="glass"></div>
+  </div>
+</div>
+<script>
+// Boot the emulator (floooh/chips, zlib licence, see emu/LICENSE): it reads
+// its options from the query string, so load the game, type RUN and put the
+// cursor keys and space on a joystick in port 2. The address bar is tidied
+// once the emulator has read them.
+(function () {
+  const clean = location.pathname + location.hash;
+  history.replaceState(null, '', location.pathname + '?file=deepdarksea.prg&joystick=digital_2&input=RUN%0A' + location.hash);
+  const title = document.title;
+  window.Module = {
+    canvas: document.getElementById('canvas'),
+    postRun: [() => { document.title = title; setTimeout(() => history.replaceState(null, '', clean), 4000); }],
+  };
+  // The emulator's joystick only listens to the cursor keys, so play WASD as
+  // them too (the game uses none of W, A, S, D). Registered before the
+  // emulator's own listeners, so it can swallow the original key.
+  const wasd = { KeyW: 'ArrowUp', KeyA: 'ArrowLeft', KeyS: 'ArrowDown', KeyD: 'ArrowRight' };
+  const keyCodes = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 };
+  for (const type of ['keydown', 'keyup']) {
+    window.addEventListener(type, e => {
+      const arrow = wasd[e.code];
+      if (!arrow || e.metaKey || e.ctrlKey || e.altKey) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      const ev = new KeyboardEvent(type, { key: arrow, code: arrow, repeat: e.repeat, bubbles: true, cancelable: true });
+      Object.defineProperty(ev, 'keyCode', { get: () => keyCodes[arrow] });
+      Object.defineProperty(ev, 'which', { get: () => keyCodes[arrow] });
+      window.dispatchEvent(ev);
+    }, true);
+  }
+  // Keep arrow keys and space from scrolling the page.
+  window.addEventListener('keydown', e => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+  });
+  const s = document.createElement('script');
+  s.src = 'emu/c64.js';
+  document.body.appendChild(s);
+})();
+</script>
+</body>
+</html>
