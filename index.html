@@ -4,60 +4,263 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Deep, Dark Sea</title>
-<meta name="description" content="Deep, Dark Sea, the greatest game in the universe, on a Commodore 64 in your browser. Cursor keys swim, space fires.">
+<meta name="description" content="Deep, Dark Sea, the greatest game in the universe, on a Commodore 64 in your browser.">
 <style>
+:root {
+  --band-h: 44px;
+  --bg: #0b0d10;
+  --band-bg: rgba(14, 17, 22, .92);
+  --ink: #e6e1d6;
+  --ink-dim: #9a9688;
+  --key: #3b332c;
+}
 html, body { margin: 0; height: 100%; }
 body {
-  background: #0b0d10;
-  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); color: var(--ink);
+  font: 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
   overflow: hidden;
+  touch-action: manipulation;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-/* The photo is 656x713. Its CRT glass spans x 152..499, y 71..336. */
+.stage {
+  position: fixed; left: 0; right: 0; top: 0;
+  bottom: calc(var(--band-h) + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; justify-content: center;
+}
+/* The photo (monitor-web.jpg) is 1400x1265; its CRT glass spans
+   x 244..1154, y 186..884. */
 .rig {
   position: relative;
-  height: min(100vh, 713px * 1.6);
-  aspect-ratio: 656 / 713;
-  max-width: 100vw;
+  aspect-ratio: 1400 / 1265;
+  height: min(100%, 100vw * 1265 / 1400);
 }
-@supports (height: 100dvh) { .rig { height: min(100dvh, 713px * 1.6); } }
-.rig > img { display: block; width: 100%; height: 100%; user-select: none; -webkit-user-drag: none; }
+.rig > img { display: block; width: 100%; height: 100%; -webkit-user-drag: none; pointer-events: none; }
 .tube {
   position: absolute;
-  left: calc(151 / 656 * 100%); width: calc(350 / 656 * 100%);
-  top: calc(70 / 713 * 100%); height: calc(268 / 713 * 100%);
-  border-radius: 7% / 9%;
+  left: calc(244 / 1400 * 100%); width: calc(910 / 1400 * 100%);
+  top: calc(186 / 1265 * 100%); height: calc(698 / 1265 * 100%);
+  border-radius: 6% / 8%;
   overflow: hidden; background: #000;
 }
-/* The emulator letterboxes its picture and prints a stats line along the
-   bottom, so the canvas is zoomed past the glass: only the picture and a
-   little border show. */
+/* The emulator fits its 1.441:1 picture to the canvas width, and draws a
+   stats line along the bottom and a mute icon top right at a fixed pixel
+   size. So the canvas is 120% of the glass wide (picture height 108.6% of
+   the glass) plus a 70px band above and below for those overlays, all
+   cropped away by the glass: only the picture and a little border show. */
 #canvas {
   position: absolute; display: block; outline: none;
-  width: 124%; aspect-ratio: 1.441; left: -12%; top: 50%;
-  transform: translateY(-50%);
+  width: 120%; left: -10%;
+  height: calc(108.6% + 140px); top: calc(-2.8% - 70px);  /* centres the play area */
   image-rendering: pixelated;
 }
 .glass {
   position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
   background:
-    radial-gradient(ellipse 110% 100% at 50% 50%, transparent 62%, rgba(0,0,0,.6) 100%),
-    linear-gradient(165deg, rgba(255,255,255,.09), rgba(255,255,255,0) 40%);
+    radial-gradient(ellipse 110% 100% at 50% 50%, transparent 64%, rgba(0,0,0,.55) 100%),
+    linear-gradient(165deg, rgba(255,255,255,.08), rgba(255,255,255,0) 40%);
+}
+
+/* ---- instruction band ---- */
+.band {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  min-height: var(--band-h);
+  padding: 6px 16px calc(6px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  background: var(--band-bg); border-top: 1px solid rgba(255,255,255,.08);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 4px 22px; color: var(--ink-dim); font-size: 13px;
+}
+.band span { white-space: nowrap; }
+.band b { color: var(--ink); font-weight: 600; }
+kbd {
+  font: 600 11.5px system-ui, sans-serif; color: var(--ink);
+  background: var(--key); border-radius: 4px; padding: 1px 6px;
+  box-shadow: 0 1.5px 0 #1d1814;
+}
+.touch-only { display: none; }
+body.touch .touch-only { display: inline; }
+body.touch .keys-only { display: none; }
+
+/* ---- touch controls ---- */
+.pad, .fire {
+  position: fixed; z-index: 2; display: none;
+  bottom: calc(var(--band-h) + env(safe-area-inset-bottom, 0px) + 18px);
+  touch-action: none;
+}
+body.touch .pad, body.touch .fire { display: block; }
+.pad {
+  left: calc(18px + env(safe-area-inset-left, 0px));
+  width: 150px; height: 150px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,.10) 0 38%, rgba(255,255,255,.18) 39% 100%);
+  border: 2px solid rgba(255,255,255,.35);
+  box-sizing: border-box;
+}
+.pad::before, .pad::after {   /* faint cross */
+  content: ""; position: absolute; background: rgba(255,255,255,.18); pointer-events: none;
+}
+.pad::before { left: 50%; top: 10%; bottom: 10%; width: 2px; margin-left: -1px; }
+.pad::after { top: 50%; left: 10%; right: 10%; height: 2px; margin-top: -1px; }
+.knob {
+  position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; margin: -31px 0 0 -31px;
+  border-radius: 50%; background: rgba(230,225,214,.45); border: 2px solid rgba(255,255,255,.55);
+  box-sizing: border-box; pointer-events: none;
+  transition: transform .08s ease-out;
+}
+.pad.active .knob { transition: none; background: rgba(230,225,214,.6); }
+.fire {
+  right: calc(22px + env(safe-area-inset-right, 0px));
+  width: 96px; height: 96px; border-radius: 50%;
+  background: rgba(200, 60, 50, .42); border: 2px solid rgba(255,190,180,.6);
+  color: rgba(255,255,255,.9); font: 700 15px system-ui, sans-serif; letter-spacing: .08em;
+  display: none; align-items: center; justify-content: center;
+}
+body.touch .fire { display: flex; }
+.fire.active { background: rgba(230, 80, 66, .7); }
+@media (orientation: portrait) {
+  /* plenty of room under the monitor: make the controls bigger */
+  .pad { width: 180px; height: 180px; }
+  .fire { width: 112px; height: 112px; }
+  /* and keep the monitor clear of them */
+  body.touch .stage { bottom: calc(var(--band-h) + env(safe-area-inset-bottom, 0px) + 216px); }
 }
 </style>
 </head>
 <body>
-<div class="rig">
-  <img src="images/c64.jpg" alt="A Commodore 64 with a 1702 monitor" draggable="false">
-  <div class="tube">
-    <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()" aria-label="Deep, Dark Sea. Cursor keys swim, space fires."></canvas>
-    <div class="glass"></div>
+<div class="stage">
+  <div class="rig">
+    <img src="images/monitor-web.jpg" alt="A Commodore 1702 monitor">
+    <div class="tube">
+      <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()" aria-label="Deep, Dark Sea"></canvas>
+      <div class="glass"></div>
+    </div>
   </div>
 </div>
+
+<div class="pad" id="pad" aria-label="Joystick"><div class="knob" id="knob"></div></div>
+<div class="fire" id="fire" role="button" aria-label="Fire">FIRE</div>
+
+<div class="band">
+  <span class="keys-only"><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>swim</b></span>
+  <span class="keys-only"><kbd>Space</kbd> <b>blow a bubble</b></span>
+  <span class="keys-only"><kbd>M</kbd> <b>music</b></span>
+  <span class="touch-only">Drag the pad to <b>swim</b></span>
+  <span class="touch-only">Tap <b>FIRE</b> to blow a bubble</span>
+  <span>Find 3 keys and <b>the thing</b></span>
+</div>
+
 <script>
-// Boot the emulator (floooh/chips, zlib licence, see emu/LICENSE): it reads
-// its options from the query string, so load the game, type RUN and put the
-// cursor keys and space on a joystick in port 2. The address bar is tidied
-// once the emulator has read them.
+// Show the touch controls on touch screens (and as soon as anyone touches).
+if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch');
+window.addEventListener('touchstart', () => document.body.classList.add('touch'), { once: true, passive: true });
+
+// ---- key events for the emulator ----
+// The emulator listens on window; dispatching on document lets the event
+// also reach its audio-unlock listener.
+const KEYS = {
+  ArrowLeft: { key: 'ArrowLeft', keyCode: 37 }, ArrowUp: { key: 'ArrowUp', keyCode: 38 },
+  ArrowRight: { key: 'ArrowRight', keyCode: 39 }, ArrowDown: { key: 'ArrowDown', keyCode: 40 },
+  Space: { key: ' ', keyCode: 32 },
+};
+function sendKey(type, code, repeat) {
+  const k = KEYS[code];
+  const ev = new KeyboardEvent(type, { key: k.key, code, repeat: !!repeat, bubbles: true, cancelable: true });
+  Object.defineProperty(ev, 'keyCode', { get: () => k.keyCode });
+  Object.defineProperty(ev, 'which', { get: () => k.keyCode });
+  document.dispatchEvent(ev);
+}
+
+// The emulator's joystick only listens to the cursor keys, so play WASD as
+// them too (the game uses none of W, A, S, D). Registered before the
+// emulator's own listeners, so it can swallow the original key.
+const WASD = { KeyW: 'ArrowUp', KeyA: 'ArrowLeft', KeyS: 'ArrowDown', KeyD: 'ArrowRight' };
+for (const type of ['keydown', 'keyup']) {
+  window.addEventListener(type, e => {
+    const arrow = e.isTrusted && WASD[e.code];
+    if (!arrow || e.metaKey || e.ctrlKey || e.altKey) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    sendKey(type, arrow, e.repeat);
+  }, true);
+}
+// Keep arrow keys and space from scrolling the page.
+window.addEventListener('keydown', e => {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+});
+
+// ---- touch joystick: drag in any of 8 directions ----
+(function () {
+  const pad = document.getElementById('pad'), knob = document.getElementById('knob');
+  const held = new Set();
+  let pointer = null;
+  function setDirs(dirs) {
+    for (const d of held) if (!dirs.has(d)) { held.delete(d); sendKey('keyup', d); }
+    for (const d of dirs) if (!held.has(d)) { held.add(d); sendKey('keydown', d); }
+  }
+  function move(e) {
+    const r = pad.getBoundingClientRect();
+    const radius = r.width / 2;
+    let dx = e.clientX - (r.left + radius), dy = e.clientY - (r.top + radius);
+    const dist = Math.hypot(dx, dy), max = radius * 0.62;
+    if (dist > max) { dx *= max / dist; dy *= max / dist; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const dirs = new Set();
+    if (dist > radius * 0.22) {
+      // 8 sectors of 45 degrees; diagonals press two keys.
+      const a = Math.atan2(dy, dx) * 180 / Math.PI;     // 0 = right, 90 = down
+      if (a > -67.5 && a < 67.5) dirs.add('ArrowRight');
+      if (a > 112.5 || a < -112.5) dirs.add('ArrowLeft');
+      if (a > 22.5 && a < 157.5) dirs.add('ArrowDown');
+      if (a < -22.5 && a > -157.5) dirs.add('ArrowUp');
+    }
+    setDirs(dirs);
+  }
+  function end(e) {
+    if (e.pointerId !== pointer) return;
+    pointer = null;
+    pad.classList.remove('active');
+    knob.style.transform = '';
+    setDirs(new Set());
+  }
+  pad.addEventListener('pointerdown', e => {
+    if (pointer !== null) return;
+    pointer = e.pointerId;
+    try { pad.setPointerCapture(e.pointerId); } catch (_) {}
+    pad.classList.add('active');
+    move(e);
+    e.preventDefault();
+  });
+  pad.addEventListener('pointermove', e => { if (e.pointerId === pointer) move(e); });
+  pad.addEventListener('pointerup', end);
+  pad.addEventListener('pointercancel', end);
+})();
+
+// ---- touch fire button ----
+(function () {
+  const fire = document.getElementById('fire');
+  let pointer = null;
+  fire.addEventListener('pointerdown', e => {
+    if (pointer !== null) return;
+    pointer = e.pointerId;
+    try { fire.setPointerCapture(e.pointerId); } catch (_) {}
+    fire.classList.add('active');
+    sendKey('keydown', 'Space');
+    e.preventDefault();
+  });
+  const up = e => {
+    if (e.pointerId !== pointer) return;
+    pointer = null;
+    fire.classList.remove('active');
+    sendKey('keyup', 'Space');
+  };
+  fire.addEventListener('pointerup', up);
+  fire.addEventListener('pointercancel', up);
+})();
+
+// ---- boot the emulator ----
+// floooh/chips (zlib licence, see emu/LICENSE) reads its options from the
+// query string: load the game, type RUN, and put the cursor keys and space
+// on a joystick in port 2. The address bar is tidied once they are read.
 (function () {
   const clean = location.pathname + location.hash;
   history.replaceState(null, '', location.pathname + '?file=deepdarksea.prg&joystick=digital_2&input=RUN%0A' + location.hash);
@@ -66,27 +269,6 @@ body {
     canvas: document.getElementById('canvas'),
     postRun: [() => { document.title = title; setTimeout(() => history.replaceState(null, '', clean), 4000); }],
   };
-  // The emulator's joystick only listens to the cursor keys, so play WASD as
-  // them too (the game uses none of W, A, S, D). Registered before the
-  // emulator's own listeners, so it can swallow the original key.
-  const wasd = { KeyW: 'ArrowUp', KeyA: 'ArrowLeft', KeyS: 'ArrowDown', KeyD: 'ArrowRight' };
-  const keyCodes = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 };
-  for (const type of ['keydown', 'keyup']) {
-    window.addEventListener(type, e => {
-      const arrow = wasd[e.code];
-      if (!arrow || e.metaKey || e.ctrlKey || e.altKey) return;
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      const ev = new KeyboardEvent(type, { key: arrow, code: arrow, repeat: e.repeat, bubbles: true, cancelable: true });
-      Object.defineProperty(ev, 'keyCode', { get: () => keyCodes[arrow] });
-      Object.defineProperty(ev, 'which', { get: () => keyCodes[arrow] });
-      window.dispatchEvent(ev);
-    }, true);
-  }
-  // Keep arrow keys and space from scrolling the page.
-  window.addEventListener('keydown', e => {
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
-  });
   const s = document.createElement('script');
   s.src = 'emu/c64.js';
   document.body.appendChild(s);
