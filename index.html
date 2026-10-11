@@ -142,7 +142,7 @@ body.touch .fire { display: flex; }
 
 <div class="band">
   <span class="keys-only"><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <b>swim</b></span>
-  <span class="keys-only"><kbd>Space</kbd> <b>blow a bubble</b></span>
+  <span class="keys-only"><kbd>Space</kbd> or <kbd>Return</kbd> <b>blow a bubble</b></span>
   <span class="keys-only"><kbd>M</kbd> <b>music</b></span>
   <span class="touch-only">Drag the pad to <b>swim</b></span>
   <span class="touch-only">Tap <b>FIRE</b> to blow a bubble</span>
@@ -162,25 +162,44 @@ const KEYS = {
   ArrowRight: { key: 'ArrowRight', keyCode: 39 }, ArrowDown: { key: 'ArrowDown', keyCode: 40 },
   Space: { key: ' ', keyCode: 32 },
 };
-function sendKey(type, code, repeat) {
+// A key released within the same frame is never seen by the C64, so hold
+// each one for at least 3 frames.
+const MIN_HOLD_MS = 60;
+const downAt = {}, pendingUp = {};
+function dispatchKey(type, code, repeat) {
   const k = KEYS[code];
   const ev = new KeyboardEvent(type, { key: k.key, code, repeat: !!repeat, bubbles: true, cancelable: true });
   Object.defineProperty(ev, 'keyCode', { get: () => k.keyCode });
   Object.defineProperty(ev, 'which', { get: () => k.keyCode });
   document.dispatchEvent(ev);
 }
+function sendKey(type, code, repeat) {
+  clearTimeout(pendingUp[code]);
+  if (type === 'keydown') {
+    if (!repeat) downAt[code] = performance.now();
+    dispatchKey(type, code, repeat);
+    return;
+  }
+  const wait = MIN_HOLD_MS - (performance.now() - (downAt[code] || 0));
+  if (wait > 0) pendingUp[code] = setTimeout(() => dispatchKey('keyup', code), wait);
+  else dispatchKey('keyup', code);
+}
 
-// The emulator's joystick only listens to the cursor keys, so play WASD as
-// them too (the game uses none of W, A, S, D). Registered before the
-// emulator's own listeners, so it can swallow the original key.
-const WASD = { KeyW: 'ArrowUp', KeyA: 'ArrowLeft', KeyS: 'ArrowDown', KeyD: 'ArrowRight' };
+// The emulator's joystick only listens to the cursor keys and space, so
+// play WASD as the cursor keys and Return as fire too (the game uses none
+// of W, A, S, D or Return). Registered before the emulator's own listeners,
+// so it can swallow the original key.
+const JOY_KEYS = {
+  KeyW: 'ArrowUp', KeyA: 'ArrowLeft', KeyS: 'ArrowDown', KeyD: 'ArrowRight',
+  Enter: 'Space', NumpadEnter: 'Space',
+};
 for (const type of ['keydown', 'keyup']) {
   window.addEventListener(type, e => {
-    const arrow = e.isTrusted && WASD[e.code];
-    if (!arrow || e.metaKey || e.ctrlKey || e.altKey) return;
+    const joy = e.isTrusted && JOY_KEYS[e.code];
+    if (!joy || e.metaKey || e.ctrlKey || e.altKey) return;
     e.stopImmediatePropagation();
     e.preventDefault();
-    sendKey(type, arrow, e.repeat);
+    sendKey(type, joy, e.repeat);
   }, true);
 }
 // Keep arrow keys and space from scrolling the page.
